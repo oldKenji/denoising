@@ -77,10 +77,11 @@ def main():
               epoch=epoch)
 
         # Validation
-        valid(valid_loader=valid_loader,
-              model=model,
-              criterion=criterion,
-              epoch=epoch)
+        with torch.no_grad():
+            valid(valid_loader=valid_loader,
+                  model=model,
+                  criterion=criterion,
+                  epoch=epoch)
 
         # Save checkpoint
         if epoch % 2 == 0:

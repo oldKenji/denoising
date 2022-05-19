@@ -36,7 +36,8 @@ if __name__ == '__main__':
         test_loader = torch.utils.data.DataLoader(test_dataset,
                                                   batch_size=4,
                                                   collate_fn=test_dataset.collate_fn)
-        valid(test_loader, model, criterion)
+        with torch.no_grad():
+            valid(test_loader, model, criterion)
     else:
         audio = torch.from_numpy(np.load(data_folder))
         audio_len = audio.shape[0]
