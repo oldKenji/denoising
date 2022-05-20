@@ -70,7 +70,7 @@ class AudioConvNet(nn.Module):
     """
     Model for denoising
     """
-    def __init__(self, kernel_size=3, num_dilation=4, repeats=2):
+    def __init__(self, kernel_size=3, num_dilation=7, repeats=3):  # d=4, r=2
         super(AudioConvNet, self).__init__()
 
         self.encoder = Encoder(kernel_size=kernel_size)

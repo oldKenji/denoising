@@ -47,7 +47,8 @@ if __name__ == '__main__':
             add_audio[i] = audio[i]
 
         add_audio = add_audio.reshape(-1, 50, 80).permute(0, 2, 1)
-        clean_audio = model(add_audio)
+        with torch.no_grad():
+            clean_audio = model(add_audio)
         clean_audio = clean_audio.permute(0, 2, 1).reshape(-1, 80)
         clean_audio = clean_audio[:audio_len].detach().numpy()
         np.save(r'output\cleaned_mel.npy', clean_audio)

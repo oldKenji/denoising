@@ -1,58 +1,78 @@
-class DiscriminatorS(torch.nn.Module):
-    def __init__(self, use_spectral_norm=False):
-        super(DiscriminatorS, self).__init__()
-        norm_f = weight_norm if use_spectral_norm == False else spectral_norm
-        self.convs = nn.ModuleList([
-            norm_f(Conv1d(1, 128, 15, 1, padding=7)),
-            norm_f(Conv1d(128, 128, 41, 2, groups=4, padding=20)),
-            norm_f(Conv1d(128, 256, 41, 2, groups=16, padding=20)),
-            norm_f(Conv1d(256, 512, 41, 4, groups=16, padding=20)),
-            norm_f(Conv1d(512, 1024, 41, 4, groups=16, padding=20)),
-            norm_f(Conv1d(1024, 1024, 41, 1, groups=16, padding=20)),
-            norm_f(Conv1d(1024, 1024, 5, 1, padding=2)),
-        ])
-        self.conv_post = norm_f(Conv1d(1024, 1, 3, 1, padding=1))
-
-    def forward(self, x):
-        fmap = []
-        for l in self.convs:
-            x = l(x)
-            x = F.leaky_relu(x, LRELU_SLOPE)
-            fmap.append(x)
-        x = self.conv_post(x)
-        fmap.append(x)
-        x = torch.flatten(x, 1, -1)
-
-        return x, fmap
+import torch
+import argparse
+from torch.utils.data import DataLoader
+import numpy as np
+from dataset import DetectNoisyDataset
+from model import AudioConvNet
+from tqdm import tqdm
 
 
-class MultiScaleDiscriminator(torch.nn.Module):
-    def __init__(self):
-        super(MultiScaleDiscriminator, self).__init__()
-        self.discriminators = nn.ModuleList([
-            DiscriminatorS(use_spectral_norm=True),
-            DiscriminatorS(),
-            DiscriminatorS(),
-        ])
-        self.meanpools = nn.ModuleList([
-            AvgPool1d(4, 2, padding=2),
-            AvgPool1d(4, 2, padding=2)
-        ])
+parser = argparse.ArgumentParser()
+parser.add_argument(  # каталог с данными
+    '-i', '--input', required=True,
+    help='Путь к данным'
+)
+parser.add_argument(  # режим
+    '-m', '--mode', default='one',
+    help='Режим работы модели'
+)
+args = vars(parser.parse_args())
 
-    def forward(self, y, y_hat):
-        y_d_rs = []
-        y_d_gs = []
-        fmap_rs = []
-        fmap_gs = []
-        for i, d in enumerate(self.discriminators):
-            if i != 0:
-                y = self.meanpools[i-1](y)
-                y_hat = self.meanpools[i-1](y_hat)
-            y_d_r, fmap_r = d(y)
-            y_d_g, fmap_g = d(y_hat)
-            y_d_rs.append(y_d_r)
-            fmap_rs.append(fmap_r)
-            y_d_gs.append(y_d_g)
-            fmap_gs.append(fmap_g)
+device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
-        return y_d_rs, y_d_gs, fmap_rs, fmap_gs
+# Загрузка модели
+model = AudioConvNet()
+model.load_state_dict(torch.load('model.pth', map_location=device))
+model = model.to(device)
+criterion = torch.nn.MSELoss().to(device)
+
+
+def test(test_loader, model, criterion):
+
+    model.eval()
+    true_pos = 0
+
+    # Batches
+    for (mel, target) in tqdm(test_loader):
+        # Move to default device
+        mel = mel.to(device)
+
+        # Forward prop.
+        predicted_mel = model(mel)
+
+        # MSE
+        mse = criterion(mel, predicted_mel)
+        predict = 1 if mse > 0.034 else 0
+        if predict == target:
+            true_pos += 1
+
+    acc = true_pos / len(test_loader)
+    print(f'ACCURACY for test dataset: {acc:.4f}')
+
+
+if __name__ == '__main__':
+
+    data_folder = args['input']
+    mode = args['mode']
+
+    if mode != 'one':
+        test_dataset = DetectNoisyDataset(data_folder, mode=mode)
+        test_loader = torch.utils.data.DataLoader(test_dataset,
+                                                  batch_size=1,
+                                                  collate_fn=test_dataset.collate_fn)
+        with torch.no_grad():
+            test(test_loader, model, criterion)
+    else:
+        mel = torch.from_numpy(np.load(data_folder))
+        add_mel = torch.zeros((int(mel.shape[0] / 50) + 1) * 50, 80)
+
+        for i in range(mel.shape[0]):
+            add_mel[i] = mel[i]
+
+        add_mel = add_mel.reshape(-1, 50, 80).permute(0, 2, 1).to(device)
+        with torch.no_grad():
+            predict_mel = model(add_mel)
+        mse = criterion(add_mel, predict_mel)
+        predict = 'DETECTED NOISY' if mse > 0.034 else 'no noise'
+
+        print('Результат обработки mel-спектрограммы : ', predict)

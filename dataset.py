@@ -57,3 +57,45 @@ class AudioDataset(Dataset):
             add_noisy[i] = good_noisy[i]
 
         return add_clean.reshape(-1, 50, 80).permute(0, 2, 1), add_noisy.reshape(-1, 50, 80).permute(0, 2, 1)
+
+
+class DetectNoisyDataset(Dataset):
+
+    def __init__(self, data_folder='data', mode='val'):
+        super().__init__()
+
+        self.data = []
+
+        alldata = os.walk(os.path.join(data_folder, mode, 'clean'))
+        alldata = [*alldata]
+
+        for dt in alldata[1:]:
+            for d in dt[2]:
+                speaker = d.split('_')[0]
+                clean_path = os.path.join(data_folder, mode, 'clean', speaker, d)
+                self.data.append((clean_path, 0))
+                noisy_path = os.path.join(data_folder, mode, 'noisy', speaker, d)
+                self.data.append((noisy_path, 1))
+
+    def __getitem__(self, index):
+
+        (file_path, target) = self.data[index]
+
+        mel = torch.from_numpy(np.load(file_path))
+        #target = torch.tensor(target)
+
+        return mel, target
+
+    def __len__(self):
+        return len(self.data)
+
+    @staticmethod
+    def collate_fn(batch):
+
+        mel, target = batch[0]
+        add_mel = torch.zeros((int(mel.shape[0] / 50) + 1) * 50, 80)
+
+        for i in range(mel.shape[0]):
+            add_mel[i] = mel[i]
+
+        return add_mel.reshape(-1, 50, 80).permute(0, 2, 1), target

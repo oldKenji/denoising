@@ -105,11 +105,11 @@ def train(train_loader, model, criterion, optimizer, epoch):
     for clean, noisy in tqdm(train_loader):
 
         # Move to default device
-        clean = clean.to(device)  # (batch_size (N), 3, 300, 300)
-        noisy = noisy.to(device)  # (batch_size (N), 3, 300, 300)
+        clean = clean.to(device)
+        noisy = noisy.to(device)
 
         # Forward prop.
-        predicted_clean = model(noisy)  # (N, 8732, 4), (N, 8732, n_classes)
+        predicted_clean = model(noisy)
 
         # Loss
         loss = criterion(clean, predicted_clean)  # scalar
@@ -142,11 +142,11 @@ def valid(valid_loader, model, criterion, epoch=None):
     # Batches
     for clean, noisy in tqdm(valid_loader):
         # Move to default device
-        clean = clean.to(device)  # (batch_size (N), 3, 300, 300)
-        noisy = noisy.to(device)  # (batch_size (N), 3, 300, 300)
+        clean = clean.to(device)
+        noisy = noisy.to(device)
 
         # Forward prop.
-        predicted_clean = model(noisy)  # (N, 8732, 4), (N, 8732, n_classes)
+        predicted_clean = model(noisy)
 
         # Loss
         loss = criterion(clean, predicted_clean)  # scalar
